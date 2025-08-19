@@ -46,19 +46,19 @@ export function HostTable({ title, hosts, loading = false }: HostTableProps) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="max-h-[600px] overflow-auto">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
+          <Table className="">
+            <TableHeader className="sticky top-0 z-10 bg-muted/50 backdrop-blur supports-[backdrop-filter]:bg-muted/30">
               <TableRow>
-                <TableHead>IP Address</TableHead>
-                <TableHead>Hostname</TableHead>
-                <TableHead>MAC Address</TableHead>
-                <TableHead>Operating System</TableHead>
-                <TableHead>Total Vulns</TableHead>
-                <TableHead>Critical</TableHead>
-                <TableHead>High</TableHead>
-                <TableHead>Medium</TableHead>
-                <TableHead>Low</TableHead>
-                <TableHead>Info</TableHead>
+                <TableHead className="text-foreground">IP Address</TableHead>
+                <TableHead className="text-foreground">Hostname</TableHead>
+                <TableHead className="text-foreground">MAC Address</TableHead>
+                <TableHead className="text-foreground">Operating System</TableHead>
+                <TableHead className="text-foreground">Total Vulns</TableHead>
+                <TableHead className="text-foreground">Critical</TableHead>
+                <TableHead className="text-foreground">High</TableHead>
+                <TableHead className="text-foreground">Medium</TableHead>
+                <TableHead className="text-foreground">Low</TableHead>
+                <TableHead className="text-foreground">Info</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -76,7 +76,7 @@ export function HostTable({ title, hosts, loading = false }: HostTableProps) {
                 </TableRow>
               ) : (
                 hosts.map((host) => (
-                  <TableRow key={host.id}>
+                  <TableRow key={host.id} className="odd:bg-muted/30">
                     <TableCell className="font-medium">{host.ipAddress}</TableCell>
                     <TableCell className="max-w-xs truncate" title={host.hostname}>
                       {host.hostname}
@@ -88,32 +88,52 @@ export function HostTable({ title, hosts, loading = false }: HostTableProps) {
                       {host.osInfo || "N/A"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="default">
+                      <Badge variant="outline" className="bg-slate-600 text-white border-transparent">
                         {host.totalVulnerabilities}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={host.criticalCount > 0 ? "destructive" : "outline"}>
+                      <Badge
+                        variant="outline"
+                        className={host.criticalCount > 0 ? "bg-red-600 text-white border-transparent" : "bg-gray-300 text-black border-transparent"}
+                        title="Critical"
+                      >
                         {host.criticalCount}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={host.highCount > 0 ? "destructive" : "outline"}>
+                      <Badge
+                        variant="outline"
+                        className={host.highCount > 0 ? "bg-orange-500 text-white border-transparent" : "bg-gray-300 text-black border-transparent"}
+                        title="High"
+                      >
                         {host.highCount}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={host.mediumCount > 0 ? "default" : "outline"}>
+                      <Badge
+                        variant="outline"
+                        className={host.mediumCount > 0 ? "bg-amber-400 text-black border-transparent" : "bg-gray-300 text-black border-transparent"}
+                        title="Medium"
+                      >
                         {host.mediumCount}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={host.lowCount > 0 ? "secondary" : "outline"}>
+                      <Badge
+                        variant="outline"
+                        className={host.lowCount > 0 ? "bg-blue-500 text-white border-transparent" : "bg-gray-300 text-black border-transparent"}
+                        title="Low"
+                      >
                         {host.lowCount}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={host.infoCount > 0 ? "outline" : "outline"}>
+                      <Badge
+                        variant="outline"
+                        className={host.infoCount > 0 ? "bg-gray-400 text-black border-transparent" : "bg-gray-300 text-black border-transparent"}
+                        title="Info"
+                      >
                         {host.infoCount}
                       </Badge>
                     </TableCell>

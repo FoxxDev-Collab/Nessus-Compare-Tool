@@ -1053,9 +1053,54 @@ fn optimize_database(app: tauri::AppHandle) -> Result<(), String> {
   .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn read_file_content(app: tauri::AppHandle, file_path: String) -> Result<String, String> {
+    use std::path::PathBuf;
+
+    // 1) Try bundled resources (works in production and after rebuilds)
+    if let Ok(resource_path) = app
+        .path()
+        .resolve(&file_path, tauri::path::BaseDirectory::Resource)
+    {
+        if resource_path.exists() {
+            return std::fs::read_to_string(resource_path).map_err(|e| e.to_string());
+        }
+    }
+
+    // 2) Try as given, relative to current working directory
+    let as_given = PathBuf::from(&file_path);
+    if as_given.exists() {
+        return std::fs::read_to_string(as_given).map_err(|e| e.to_string());
+    }
+
+    // 3) Dev fallbacks: check common project-relative locations
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let candidates = [
+        // when file_path is just "globals.css"
+        cwd.join("app").join("globals.css"),
+        // when running from src-tauri, project root is parent
+        cwd.join("..").join("app").join("globals.css"),
+        // original provided path
+        cwd.join(&file_path),
+    ];
+
+    for p in candidates.iter() {
+        if p.exists() {
+            return std::fs::read_to_string(p).map_err(|e| e.to_string());
+        }
+    }
+
+    Err(format!(
+        "Failed to locate file: {}. Tried resource dir and dev fallbacks.",
+        file_path
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_dialog::init())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app
@@ -1083,6 +1128,7 @@ pub fn run() {
       get_host_vulnerabilities,
       get_report_vulnerabilities,
       compare_reports,
+      read_file_content,
       import_nessus_file,
       delete_report,
       get_scan_metadata,

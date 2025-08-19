@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
-import { FileText, Shield, AlertTriangle } from "lucide-react";
+import { FileText, Shield, AlertTriangle, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -68,8 +70,8 @@ export default function ComparePage() {
   const [selectedReport2, setSelectedReport2] = useState<string>("");
   const [reportData1, setReportData1] = useState<ReportData | null>(null);
   const [reportData2, setReportData2] = useState<ReportData | null>(null);
-
   const [loadingReports, setLoadingReports] = useState(false);
+  const comparisonContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadReports();
@@ -152,6 +154,147 @@ export default function ComparePage() {
     setSelectedReport2("");
     setReportData1(null);
     setReportData2(null);
+  };
+
+  const handlePrint = async () => {
+    if (!comparisonContentRef.current || !reportData1 || !reportData2) {
+      toast.error("Cannot print report, content or data is missing.");
+      return;
+    }
+
+    toast.info("Generating printable report...");
+
+    try {
+      // Use Tailwind CDN so Tailwind classes render in the exported HTML without relying on compiled CSS
+      const cssContent = "";
+
+      // Ensure all tab panels are mounted (Radix/shadcn often lazy-mounts inactive tabs)
+      const rootEl = comparisonContentRef.current as HTMLElement;
+      if (rootEl) {
+        const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+        // Search the whole document in case tab headers live outside the captured container
+        const tablists = document.querySelectorAll('[role="tablist"]');
+        for (const tl of Array.from(tablists)) {
+          const tabs = (tl as HTMLElement).querySelectorAll('[role="tab"]');
+          const currentActive = (tl as HTMLElement).querySelector('[role="tab"][data-state="active"], [role="tab"][aria-selected="true"]') as HTMLElement | null;
+          for (const tab of Array.from(tabs)) {
+            (tab as HTMLElement).click();
+            // Give React time to mount/render
+            // Slight delay to allow effects/state updates
+            // 120ms is usually enough; adjust if needed
+            // eslint-disable-next-line no-await-in-loop
+            await wait(120);
+          }
+          if (currentActive) {
+            currentActive.click();
+            // eslint-disable-next-line no-await-in-loop
+            await wait(60);
+          }
+        }
+      }
+
+      const contentHtml = comparisonContentRef.current.innerHTML;
+      const reportTitle = `Comparison: ${reportData1.report.filename} vs ${reportData2.report.filename}`;
+
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html lang="en" class="light">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${reportTitle}</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <script>
+              tailwind.config = { darkMode: 'class' };
+            </script>
+            <style>
+              ${cssContent}
+              /* Print-specific adjustments */
+              @page { size: auto; margin: 1in; }
+              html, body { background: white; }
+              .no-print { display: none !important; }
+            </style>
+          </head>
+          <body class="bg-white text-black">
+            <h1 class="text-3xl font-bold mb-4">${reportTitle}</h1>
+            ${contentHtml}
+            <script>
+              (function() {
+                function initTabs(root) {
+                  var tablists = root.querySelectorAll('[role="tablist"]');
+                  tablists.forEach(function(tl){
+                    var tabs = tl.querySelectorAll('[role="tab"]');
+                    tabs.forEach(function(tab){
+                      tab.addEventListener('click', function(){
+                        // current group containers
+                        var group = tl;
+                        var allTabs = group.querySelectorAll('[role="tab"]');
+                        // find panels by aria-controls
+                        var panelIds = Array.from(allTabs).map(function(t){ return t.getAttribute('aria-controls'); });
+                        var panels = [];
+                        panelIds.forEach(function(id){
+                          if (!id) return;
+                          var p = root.querySelector('#' + CSS.escape(id));
+                          if (p) panels.push(p);
+                        });
+
+                        // deactivate all
+                        allTabs.forEach(function(t){
+                          t.setAttribute('aria-selected','false');
+                          t.setAttribute('data-state','inactive');
+                        });
+                        panels.forEach(function(p){
+                          p.setAttribute('data-state','inactive');
+                          p.setAttribute('hidden','');
+                          p.style.display = 'none';
+                        });
+
+                        // activate clicked
+                        tab.setAttribute('aria-selected','true');
+                        tab.setAttribute('data-state','active');
+                        var targetId = tab.getAttribute('aria-controls');
+                        if (targetId) {
+                          var panel = root.querySelector('#' + CSS.escape(targetId));
+                          if (panel) {
+                            panel.removeAttribute('hidden');
+                            panel.style.display = 'block';
+                            panel.setAttribute('data-state','active');
+                          }
+                        }
+                      });
+                    });
+
+                    // ensure initial state is consistent
+                    var active = tl.querySelector('[role="tab"][data-state="active"], [role="tab"][aria-selected="true"]') || tabs[0];
+                    if (active) active.click();
+                  });
+                }
+
+                document.addEventListener('DOMContentLoaded', function(){
+                  initTabs(document);
+                });
+              })();
+            </script>
+          </body>
+        </html>
+      `;
+
+      const filePath = await save({
+        title: "Save Report",
+        defaultPath: `Nessus_Compare_${reportData1.report.id}_vs_${reportData2.report.id}.html`,
+        filters: [{ name: 'HTML Document', extensions: ['html'] }],
+      });
+
+      if (filePath) {
+        await writeTextFile(filePath, fullHtml);
+        toast.success(`Report saved to ${filePath}`);
+      } else {
+        toast.info("Save operation cancelled.");
+      }
+    } catch (error) {
+      console.error("Failed to generate or save report:", error);
+      toast.error("Failed to generate report: " + String(error));
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -421,12 +564,21 @@ export default function ComparePage() {
             >
               Clear
             </Button>
+            <Button 
+              onClick={handlePrint}
+              variant="outline"
+              disabled={!reportData1 || !reportData2}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print Reports
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {(reportData1 && reportData2) && (
-        <Tabs defaultValue="delta" className="space-y-6">
+        <div ref={comparisonContentRef}>
+          <Tabs defaultValue="delta" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="delta">Delta Report</TabsTrigger>
             <TabsTrigger value="hosts">Host Comparison</TabsTrigger>
@@ -455,9 +607,18 @@ export default function ComparePage() {
                           {delta.new.length}
                         </div>
                         <div className="space-y-1 text-sm">
-                          <div className="flex justify-between"><span>Critical:</span><Badge variant="destructive">{delta.newCounts.critical}</Badge></div>
-                          <div className="flex justify-between"><span>High:</span><Badge variant="destructive">{delta.newCounts.high}</Badge></div>
-                          <div className="flex justify-between"><span>Medium:</span><Badge variant="default">{delta.newCounts.medium}</Badge></div>
+                          <div className="flex justify-between">
+                            <span>Critical:</span>
+                            <Badge variant="outline" className="bg-red-600 text-white border-transparent">{delta.newCounts.critical}</Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>High:</span>
+                            <Badge variant="outline" className="bg-orange-500 text-white border-transparent">{delta.newCounts.high}</Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Medium:</span>
+                            <Badge variant="outline" className="bg-amber-400 text-black border-transparent">{delta.newCounts.medium}</Badge>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -474,9 +635,18 @@ export default function ComparePage() {
                           {delta.resolved.length}
                         </div>
                         <div className="space-y-1 text-sm">
-                          <div className="flex justify-between"><span>Critical:</span><Badge variant="destructive">{delta.resolvedCounts.critical}</Badge></div>
-                          <div className="flex justify-between"><span>High:</span><Badge variant="destructive">{delta.resolvedCounts.high}</Badge></div>
-                          <div className="flex justify-between"><span>Medium:</span><Badge variant="default">{delta.resolvedCounts.medium}</Badge></div>
+                          <div className="flex justify-between">
+                            <span>Critical:</span>
+                            <Badge variant="outline" className="bg-red-600 text-white border-transparent">{delta.resolvedCounts.critical}</Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>High:</span>
+                            <Badge variant="outline" className="bg-orange-500 text-white border-transparent">{delta.resolvedCounts.high}</Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Medium:</span>
+                            <Badge variant="outline" className="bg-amber-400 text-black border-transparent">{delta.resolvedCounts.medium}</Badge>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -493,9 +663,18 @@ export default function ComparePage() {
                           {delta.persistent.length}
                         </div>
                         <div className="space-y-1 text-sm">
-                          <div className="flex justify-between"><span>Critical:</span><Badge variant="destructive">{delta.persistentCounts.critical}</Badge></div>
-                          <div className="flex justify-between"><span>High:</span><Badge variant="destructive">{delta.persistentCounts.high}</Badge></div>
-                          <div className="flex justify-between"><span>Medium:</span><Badge variant="default">{delta.persistentCounts.medium}</Badge></div>
+                          <div className="flex justify-between">
+                            <span>Critical:</span>
+                            <Badge variant="outline" className="bg-red-600 text-white border-transparent">{delta.persistentCounts.critical}</Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>High:</span>
+                            <Badge variant="outline" className="bg-orange-500 text-white border-transparent">{delta.persistentCounts.high}</Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Medium:</span>
+                            <Badge variant="outline" className="bg-amber-400 text-black border-transparent">{delta.persistentCounts.medium}</Badge>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -622,15 +801,15 @@ export default function ComparePage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span>Critical:</span>
-                            <Badge variant="destructive">{comparison.commonCounts.critical}</Badge>
+                            <Badge variant="outline" className="bg-red-600 text-white border-transparent">{comparison.commonCounts.critical}</Badge>
                           </div>
                           <div className="flex justify-between">
                             <span>High:</span>
-                            <Badge variant="destructive">{comparison.commonCounts.high}</Badge>
+                            <Badge variant="outline" className="bg-orange-500 text-white border-transparent">{comparison.commonCounts.high}</Badge>
                           </div>
                           <div className="flex justify-between">
                             <span>Medium:</span>
-                            <Badge variant="default">{comparison.commonCounts.medium}</Badge>
+                            <Badge variant="outline" className="bg-amber-400 text-black border-transparent">{comparison.commonCounts.medium}</Badge>
                           </div>
                         </div>
                       </CardContent>
@@ -650,15 +829,15 @@ export default function ComparePage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span>Critical:</span>
-                            <Badge variant="destructive">{comparison.unique1Counts.critical}</Badge>
+                            <Badge variant="outline" className="bg-red-600 text-white border-transparent">{comparison.unique1Counts.critical}</Badge>
                           </div>
                           <div className="flex justify-between">
                             <span>High:</span>
-                            <Badge variant="destructive">{comparison.unique1Counts.high}</Badge>
+                            <Badge variant="outline" className="bg-orange-500 text-white border-transparent">{comparison.unique1Counts.high}</Badge>
                           </div>
                           <div className="flex justify-between">
                             <span>Medium:</span>
-                            <Badge variant="default">{comparison.unique1Counts.medium}</Badge>
+                            <Badge variant="outline" className="bg-amber-400 text-black border-transparent">{comparison.unique1Counts.medium}</Badge>
                           </div>
                         </div>
                       </CardContent>
@@ -678,15 +857,15 @@ export default function ComparePage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span>Critical:</span>
-                            <Badge variant="destructive">{comparison.unique2Counts.critical}</Badge>
+                            <Badge variant="outline" className="bg-red-600 text-white border-transparent">{comparison.unique2Counts.critical}</Badge>
                           </div>
                           <div className="flex justify-between">
                             <span>High:</span>
-                            <Badge variant="destructive">{comparison.unique2Counts.high}</Badge>
+                            <Badge variant="outline" className="bg-orange-500 text-white border-transparent">{comparison.unique2Counts.high}</Badge>
                           </div>
                           <div className="flex justify-between">
                             <span>Medium:</span>
-                            <Badge variant="default">{comparison.unique2Counts.medium}</Badge>
+                            <Badge variant="outline" className="bg-amber-400 text-black border-transparent">{comparison.unique2Counts.medium}</Badge>
                           </div>
                         </div>
                       </CardContent>
@@ -835,7 +1014,8 @@ export default function ComparePage() {
             })()}
           </TabsContent>
           
-        </Tabs>
+          </Tabs>
+        </div>
       )}
     </div>
   );
