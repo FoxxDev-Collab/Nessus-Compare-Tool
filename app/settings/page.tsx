@@ -366,7 +366,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <span className="font-medium">Version:</span>
-              <span className="ml-2">1.0.0</span>
+              <span className="ml-2">1.0.2</span>
             </div>
             <div>
               <span className="font-medium">Database:</span>
