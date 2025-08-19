@@ -192,29 +192,54 @@ export default function ComparePage() {
     };
   };
 
-  const getSeverityText = (severity: number) => {
-    switch (severity) {
-      case 4: return "Critical";
-      case 3: return "High";
-      case 2: return "Medium";
-      case 1: return "Low";
-      case 0: return "Info";
-      default: return "Unknown";
-    }
-  };
-
-  const getSeverityColor = (severity: number) => {
-    switch (severity) {
-      case 4: return "destructive";
-      case 3: return "destructive";
-      case 2: return "default";
-      case 1: return "secondary";
-      case 0: return "outline";
-      default: return "outline";
-    }
-  };
-
   const getHostComparison = () => {
+    if (!reportData1 || !reportData2) return null;
+
+    const hosts1 = reportData1.hosts;
+    const hosts2 = reportData2.hosts;
+    const vulns1 = reportData1.vulnerabilities;
+    const vulns2 = reportData2.vulnerabilities;
+
+    const hostMap1 = new Map(hosts1.map(h => [h.ipAddress, h]));
+    const hostMap2 = new Map(hosts2.map(h => [h.ipAddress, h]));
+
+    const commonHostIPs = new Set([...hostMap1.keys()].filter(ip => hostMap2.has(ip)));
+    const uniqueToReport1 = hosts1.filter(h => !hostMap2.has(h.ipAddress));
+    const uniqueToReport2 = hosts2.filter(h => !hostMap1.has(h.ipAddress));
+    const commonHosts = hosts1.filter(h => hostMap2.has(h.ipAddress));
+
+    // Simplified vulnerability comparison for common hosts
+    const getVulnsForHostIds = (ids: number[], vulns: NessusVulnerability[]) => {
+      const idSet = new Set(ids);
+      return vulns.filter(v => idSet.has(v.hostId));
+    };
+
+    const commonHostIds1 = commonHosts.map(h => h.id);
+    const commonHostIds2 = [...commonHostIPs].map(ip => hostMap2.get(ip)!.id);
+
+    const vulnsOnCommonHosts1 = getVulnsForHostIds(commonHostIds1, vulns1);
+    const vulnsOnCommonHosts2 = getVulnsForHostIds(commonHostIds2, vulns2);
+
+    const getSeverityCounts = (vulns: NessusVulnerability[]) => ({
+      critical: vulns.filter(v => v.severity === 4).length,
+      high: vulns.filter(v => v.severity === 3).length,
+      medium: vulns.filter(v => v.severity === 2).length,
+      low: vulns.filter(v => v.severity === 1).length,
+      info: vulns.filter(v => v.severity === 0).length,
+    });
+
+    return {
+      commonHosts,
+      uniqueToReport1,
+      uniqueToReport2,
+      vulnsOnCommonHosts1,
+      vulnsOnCommonHosts2,
+      counts1: getSeverityCounts(vulnsOnCommonHosts1),
+      counts2: getSeverityCounts(vulnsOnCommonHosts2),
+    };
+  };
+
+  const getDeltaComparison = () => {
     if (!reportData1 || !reportData2) return null;
 
     const hosts1 = reportData1.hosts;
@@ -244,25 +269,44 @@ export default function ComparePage() {
     const commonHostVulns2 = getVulnsForHosts(commonHostIds2, vulns2);
 
     // Find vulnerabilities that are common between the common hosts
-    const commonHostsPluginMap1 = new Map(commonHostVulns1.map(v => [`${v.hostId}-${v.pluginId}`, v]));
-    const commonHostsPluginMap2 = new Map(commonHostVulns2.map(v => {
-      // Map host ID from report2 to corresponding host in report1
-      const host2 = hosts2.find(h => h.id === v.hostId);
-      const host1 = host2 ? hostMap1.get(host2.ipAddress) : null;
-      const mappedKey = host1 ? `${host1.id}-${v.pluginId}` : `${v.hostId}-${v.pluginId}`;
-      return [mappedKey, v];
-    }));
+    // A vulnerability is identified by its pluginId AND the host it's on.
+    // Since hostIds are different across reports, we map them using the host's IP address.
+    const keyForVuln = (vuln: NessusVulnerability, host: NessusHost) => `${host.ipAddress}-${vuln.pluginId}`;
 
-    const sharedVulnKeys = new Set([...commonHostsPluginMap1.keys()].filter(key => commonHostsPluginMap2.has(key)));
-    const vulnerabilitiesOnlyInReport1 = commonHostVulns1.filter(v => !commonHostsPluginMap2.has(`${v.hostId}-${v.pluginId}`));
-    const vulnerabilitiesOnlyInReport2 = commonHostVulns2.filter(v => {
-      const host2 = hosts2.find(h => h.id === v.hostId);
-      const host1 = host2 ? hostMap1.get(host2.ipAddress) : null;
-      const mappedKey = host1 ? `${host1.id}-${v.pluginId}` : `${v.hostId}-${v.pluginId}`;
-      return !sharedVulnKeys.has(mappedKey);
-    });
-    const sharedVulnerabilities = commonHostVulns1.filter(v => sharedVulnKeys.has(`${v.hostId}-${v.pluginId}`));
+    const vulnMap1 = new Map<string, NessusVulnerability>();
+    for (const host of hosts1) {
+      const hostVulns = vulns1.filter(v => v.hostId === host.id);
+      for (const vuln of hostVulns) {
+        vulnMap1.set(keyForVuln(vuln, host), vuln);
+      }
+    }
 
+    const vulnMap2 = new Map<string, NessusVulnerability>();
+    for (const host of hosts2) {
+      const hostVulns = vulns2.filter(v => v.hostId === host.id);
+      for (const vuln of hostVulns) {
+        vulnMap2.set(keyForVuln(vuln, host), vuln);
+      }
+    }
+
+    const resolvedVulns: NessusVulnerability[] = []; // In 1, not in 2
+    const newVulns: NessusVulnerability[] = []; // In 2, not in 1
+    const persistentVulns: NessusVulnerability[] = []; // In both
+
+    for (const [key, vuln] of vulnMap1.entries()) {
+      if (vulnMap2.has(key)) {
+        persistentVulns.push(vuln);
+      } else {
+        resolvedVulns.push(vuln);
+      }
+    }
+
+    for (const [key, vuln] of vulnMap2.entries()) {
+      if (!vulnMap1.has(key)) {
+        newVulns.push(vuln);
+      }
+    }
+    
     // Calculate severity counts
     const getSeverityCounts = (vulns: NessusVulnerability[]) => ({
       critical: vulns.filter(v => v.severity === 4).length,
@@ -273,16 +317,38 @@ export default function ComparePage() {
     });
 
     return {
+      new: newVulns,
+      resolved: resolvedVulns,
+      persistent: persistentVulns,
+      newCounts: getSeverityCounts(newVulns),
+      resolvedCounts: getSeverityCounts(resolvedVulns),
+      persistentCounts: getSeverityCounts(persistentVulns),
+      hostsOnlyIn1: uniqueToReport1,
+      hostsOnlyIn2: uniqueToReport2,
       commonHosts,
-      uniqueToReport1,
-      uniqueToReport2,
-      sharedVulnerabilities,
-      vulnerabilitiesOnlyInReport1,
-      vulnerabilitiesOnlyInReport2,
-      sharedVulnCounts: getSeverityCounts(sharedVulnerabilities),
-      uniqueVuln1Counts: getSeverityCounts(vulnerabilitiesOnlyInReport1),
-      uniqueVuln2Counts: getSeverityCounts(vulnerabilitiesOnlyInReport2),
     };
+  };
+
+  const getSeverityText = (severity: number) => {
+    switch (severity) {
+      case 4: return "Critical";
+      case 3: return "High";
+      case 2: return "Medium";
+      case 1: return "Low";
+      case 0: return "Info";
+      default: return "Unknown";
+    }
+  };
+
+  const getSeverityColor = (severity: number) => {
+    switch (severity) {
+      case 4: return "destructive";
+      case 3: return "destructive";
+      case 2: return "default";
+      case 1: return "secondary";
+      case 0: return "outline";
+      default: return "outline";
+    }
   };
 
   return (
@@ -360,14 +426,165 @@ export default function ComparePage() {
       </Card>
 
       {(reportData1 && reportData2) && (
-        <Tabs defaultValue="vulnerabilities" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="vulnerabilities">Side-by-Side View</TabsTrigger>
-            <TabsTrigger value="comparison">Vulnerability Analysis</TabsTrigger>
+        <Tabs defaultValue="delta" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="delta">Delta Report</TabsTrigger>
             <TabsTrigger value="hosts">Host Comparison</TabsTrigger>
+            <TabsTrigger value="side-by-side">Side-by-Side</TabsTrigger>
+            <TabsTrigger value="sets">Vulnerability Sets</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="delta">
+            {(() => {
+              const delta = getDeltaComparison();
+              if (!delta) return null;
+
+              return (
+                <div className="space-y-6">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card className="border-blue-200 bg-blue-50 text-black dark:text-black card-light">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
+                          <AlertTriangle className="h-5 w-5" />
+                          New Vulnerabilities
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
+                          {delta.new.length}
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between"><span>Critical:</span><Badge variant="destructive">{delta.newCounts.critical}</Badge></div>
+                          <div className="flex justify-between"><span>High:</span><Badge variant="destructive">{delta.newCounts.high}</Badge></div>
+                          <div className="flex justify-between"><span>Medium:</span><Badge variant="default">{delta.newCounts.medium}</Badge></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-green-200 bg-green-50 text-black dark:text-black card-light">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
+                          <Shield className="h-5 w-5" />
+                          Resolved Vulnerabilities
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
+                          {delta.resolved.length}
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between"><span>Critical:</span><Badge variant="destructive">{delta.resolvedCounts.critical}</Badge></div>
+                          <div className="flex justify-between"><span>High:</span><Badge variant="destructive">{delta.resolvedCounts.high}</Badge></div>
+                          <div className="flex justify-between"><span>Medium:</span><Badge variant="default">{delta.resolvedCounts.medium}</Badge></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-gray-200 bg-gray-50 text-black dark:text-black card-light">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
+                          <FileText className="h-5 w-5" />
+                          Persistent Vulnerabilities
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
+                          {delta.persistent.length}
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between"><span>Critical:</span><Badge variant="destructive">{delta.persistentCounts.critical}</Badge></div>
+                          <div className="flex justify-between"><span>High:</span><Badge variant="destructive">{delta.persistentCounts.high}</Badge></div>
+                          <div className="flex justify-between"><span>Medium:</span><Badge variant="default">{delta.persistentCounts.medium}</Badge></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Detailed Tables */}
+                  <div className="grid grid-cols-1 gap-6">
+                    <VulnerabilityTable title="New Vulnerabilities" vulnerabilities={delta.new} />
+                    <VulnerabilityTable title="Resolved Vulnerabilities" vulnerabilities={delta.resolved} />
+                    <VulnerabilityTable title="Persistent Vulnerabilities" vulnerabilities={delta.persistent} />
+                  </div>
+                </div>
+              );
+            })()}
+          </TabsContent>
           
-          <TabsContent value="vulnerabilities">
+          <TabsContent value="hosts">
+            {(() => {
+              const hostComparison = getHostComparison();
+              if (!hostComparison) return null;
+
+              return (
+                <div className="space-y-6">
+                  {/* Host Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card className="border-green-200 bg-green-50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-green-800">
+                          <Shield className="h-5 w-5" />
+                          Common Hosts
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-green-900 mb-2">
+                          {hostComparison.commonHosts.length}
+                        </div>
+                        <p className="text-sm text-green-700">
+                          Hosts present in both scans
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-orange-200 bg-orange-50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-orange-800">
+                          <AlertTriangle className="h-5 w-5" />
+                          Only in {reportData1.report.filename}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-orange-900 mb-2">
+                          {hostComparison.uniqueToReport1.length}
+                        </div>
+                        <p className="text-sm text-orange-700">
+                          Hosts not found in second scan
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-blue-200 bg-blue-50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-blue-800">
+                          <AlertTriangle className="h-5 w-5" />
+                          Only in {reportData2.report.filename}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-blue-900 mb-2">
+                          {hostComparison.uniqueToReport2.length}
+                        </div>
+                        <p className="text-sm text-blue-700">
+                          New hosts in second scan
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Detailed Host Tables */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <HostTable title={`Hosts only in ${reportData1.report.filename}`} hosts={hostComparison.uniqueToReport1} />
+                    <HostTable title={`Hosts only in ${reportData2.report.filename}`} hosts={hostComparison.uniqueToReport2} />
+                  </div>
+                  <HostTable title="Common Hosts" hosts={hostComparison.commonHosts} />
+                </div>
+              );
+            })()}
+          </TabsContent>
+
+          <TabsContent value="side-by-side">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <VulnerabilityTable
                 title={reportData1.report.filename}
@@ -382,7 +599,7 @@ export default function ComparePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="comparison">
+          <TabsContent value="sets">
             {(() => {
               const comparison = getVulnerabilityComparison();
               if (!comparison) return null;
@@ -618,339 +835,6 @@ export default function ComparePage() {
             })()}
           </TabsContent>
           
-          <TabsContent value="hosts">
-            {(() => {
-              const hostComparison = getHostComparison();
-              if (!hostComparison) return null;
-
-              return (
-                <div className="space-y-6">
-                  {/* Host Summary Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="border-green-200 bg-green-50">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-green-800">
-                          <Shield className="h-5 w-5" />
-                          Common Hosts
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-green-900 mb-2">
-                          {hostComparison.commonHosts.length}
-                        </div>
-                        <p className="text-sm text-green-700">
-                          Hosts present in both scans
-                        </p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-orange-200 bg-orange-50">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-orange-800">
-                          <AlertTriangle className="h-5 w-5" />
-                          Only in {reportData1.report.filename}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-orange-900 mb-2">
-                          {hostComparison.uniqueToReport1.length}
-                        </div>
-                        <p className="text-sm text-orange-700">
-                          Hosts not found in second scan
-                        </p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-blue-200 bg-blue-50">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-blue-800">
-                          <AlertTriangle className="h-5 w-5" />
-                          Only in {reportData2.report.filename}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-blue-900 mb-2">
-                          {hostComparison.uniqueToReport2.length}
-                        </div>
-                        <p className="text-sm text-blue-700">
-                          New hosts in second scan
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Vulnerability Comparison for Common Hosts */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="border-emerald-200 bg-emerald-50 card-light">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
-                          <Shield className="h-5 w-5" />
-                          Persistent Vulnerabilities
-                        </CardTitle>
-                        <p className="text-xs text-black dark:text-black">Found on same hosts in both scans</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
-                          {hostComparison.sharedVulnerabilities.length}
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span>Critical:</span>
-                            <Badge variant="destructive">{hostComparison.sharedVulnCounts.critical}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>High:</span>
-                            <Badge variant="destructive">{hostComparison.sharedVulnCounts.high}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Medium:</span>
-                            <Badge variant="default">{hostComparison.sharedVulnCounts.medium}</Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-red-200 bg-red-50 card-light">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
-                          <AlertTriangle className="h-5 w-5" />
-                          Resolved Vulnerabilities
-                        </CardTitle>
-                        <p className="text-xs text-black dark:text-black">Present in scan 1, absent in scan 2</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
-                          {hostComparison.vulnerabilitiesOnlyInReport1.length}
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span>Critical:</span>
-                            <Badge variant="destructive">{hostComparison.uniqueVuln1Counts.critical}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>High:</span>
-                            <Badge variant="destructive">{hostComparison.uniqueVuln1Counts.high}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Medium:</span>
-                            <Badge variant="default">{hostComparison.uniqueVuln1Counts.medium}</Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-amber-200 bg-amber-50 card-light">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
-                          <AlertTriangle className="h-5 w-5" />
-                          New Vulnerabilities
-                        </CardTitle>
-                        <p className="text-xs text-black dark:text-black">Absent in scan 1, present in scan 2</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
-                          {hostComparison.vulnerabilitiesOnlyInReport2.length}
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span>Critical:</span>
-                            <Badge variant="destructive">{hostComparison.uniqueVuln2Counts.critical}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>High:</span>
-                            <Badge variant="destructive">{hostComparison.uniqueVuln2Counts.high}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Medium:</span>
-                            <Badge variant="default">{hostComparison.uniqueVuln2Counts.medium}</Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Side-by-Side Host Tables */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <HostTable
-                      title={reportData1.report.filename}
-                      hosts={reportData1.hosts}
-                      loading={loadingReports}
-                    />
-                    <HostTable
-                      title={reportData2.report.filename}
-                      hosts={reportData2.hosts}
-                      loading={loadingReports}
-                    />
-                  </div>
-
-                  {/* Detailed Vulnerability Comparison Tables */}
-                  <div className="grid grid-cols-1 gap-6">
-                    {/* Persistent Vulnerabilities */}
-                    {hostComparison.sharedVulnerabilities.length > 0 && (
-                      <Card className="border-emerald-200">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-emerald-700">
-                            <Shield className="h-5 w-5" />
-                            Persistent Vulnerabilities on Common Hosts ({hostComparison.sharedVulnerabilities.length})
-                          </CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            Vulnerabilities that remain on the same hosts across both scans
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="max-h-96 overflow-auto">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Plugin ID</TableHead>
-                                  <TableHead>Plugin Name</TableHead>
-                                  <TableHead>Host IP</TableHead>
-                                  <TableHead>Severity</TableHead>
-                                  <TableHead>CVSS Score</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {hostComparison.sharedVulnerabilities.slice(0, 20).map((vuln) => {
-                                  const host = reportData1.hosts.find(h => h.id === vuln.hostId);
-                                  return (
-                                    <TableRow key={`${vuln.id}-shared`}>
-                                      <TableCell className="font-mono">{vuln.pluginId}</TableCell>
-                                      <TableCell className="max-w-xs truncate" title={vuln.pluginName}>
-                                        {vuln.pluginName}
-                                      </TableCell>
-                                      <TableCell className="font-mono">{host?.ipAddress || "N/A"}</TableCell>
-                                      <TableCell>
-                                        <Badge variant={getSeverityColor(vuln.severity) as "default" | "secondary" | "destructive" | "outline"}>
-                                          {getSeverityText(vuln.severity)}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell>{vuln.cvssScore?.toFixed(1) || "N/A"}</TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                            {hostComparison.sharedVulnerabilities.length > 20 && (
-                              <div className="text-center py-2 text-sm text-muted-foreground">
-                                Showing 20 of {hostComparison.sharedVulnerabilities.length} vulnerabilities
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Resolved and New Vulnerabilities Side by Side */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {hostComparison.vulnerabilitiesOnlyInReport1.length > 0 && (
-                        <Card className="border-red-200">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-red-700">
-                              <AlertTriangle className="h-5 w-5" />
-                              Resolved Vulnerabilities ({hostComparison.vulnerabilitiesOnlyInReport1.length})
-                            </CardTitle>
-                            <p className="text-xs text-muted-foreground">
-                              Vulnerabilities that were remediated between scans
-                            </p>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="max-h-96 overflow-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Plugin ID</TableHead>
-                                    <TableHead>Plugin Name</TableHead>
-                                    <TableHead>Host IP</TableHead>
-                                    <TableHead>Severity</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {hostComparison.vulnerabilitiesOnlyInReport1.slice(0, 15).map((vuln) => {
-                                    const host = reportData1.hosts.find(h => h.id === vuln.hostId);
-                                    return (
-                                      <TableRow key={`${vuln.id}-resolved`}>
-                                        <TableCell className="font-mono">{vuln.pluginId}</TableCell>
-                                        <TableCell className="max-w-xs truncate" title={vuln.pluginName}>
-                                          {vuln.pluginName}
-                                        </TableCell>
-                                        <TableCell className="font-mono">{host?.ipAddress || "N/A"}</TableCell>
-                                        <TableCell>
-                                          <Badge variant={getSeverityColor(vuln.severity) as "default" | "secondary" | "destructive" | "outline"}>
-                                            {getSeverityText(vuln.severity)}
-                                          </Badge>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                              {hostComparison.vulnerabilitiesOnlyInReport1.length > 15 && (
-                                <div className="text-center py-2 text-sm text-muted-foreground">
-                                  Showing 15 of {hostComparison.vulnerabilitiesOnlyInReport1.length} vulnerabilities
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-
-                      {hostComparison.vulnerabilitiesOnlyInReport2.length > 0 && (
-                        <Card className="border-amber-200">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-amber-700">
-                              <AlertTriangle className="h-5 w-5" />
-                              New Vulnerabilities ({hostComparison.vulnerabilitiesOnlyInReport2.length})
-                            </CardTitle>
-                            <p className="text-xs text-muted-foreground">
-                              Vulnerabilities that appeared between scans
-                            </p>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="max-h-96 overflow-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Plugin ID</TableHead>
-                                    <TableHead>Plugin Name</TableHead>
-                                    <TableHead>Host IP</TableHead>
-                                    <TableHead>Severity</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {hostComparison.vulnerabilitiesOnlyInReport2.slice(0, 15).map((vuln) => {
-                                    const host = reportData2.hosts.find(h => h.id === vuln.hostId);
-                                    return (
-                                      <TableRow key={`${vuln.id}-new`}>
-                                        <TableCell className="font-mono">{vuln.pluginId}</TableCell>
-                                        <TableCell className="max-w-xs truncate" title={vuln.pluginName}>
-                                          {vuln.pluginName}
-                                        </TableCell>
-                                        <TableCell className="font-mono">{host?.ipAddress || "N/A"}</TableCell>
-                                        <TableCell>
-                                          <Badge variant={getSeverityColor(vuln.severity) as "default" | "secondary" | "destructive" | "outline"}>
-                                            {getSeverityText(vuln.severity)}
-                                          </Badge>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                              {hostComparison.vulnerabilitiesOnlyInReport2.length > 15 && (
-                                <div className="text-center py-2 text-sm text-muted-foreground">
-                                  Showing 15 of {hostComparison.vulnerabilitiesOnlyInReport2.length} vulnerabilities
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </TabsContent>
         </Tabs>
       )}
     </div>
