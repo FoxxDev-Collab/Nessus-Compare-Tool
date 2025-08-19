@@ -329,79 +329,81 @@ export default function TrendsPage() {
           </div>
 
           {/* Grouped Bar: Severity by Report */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Severity Distribution by Scan</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer
-                config={{
-                  // Tailwind palette approximations for consistent theming
-                  critical: {
-                    label: "Critical",
-                    theme: { light: "#ef4444", dark: "#f87171" }, // red-500/400
-                  },
-                  high: {
-                    label: "High",
-                    theme: { light: "#f59e0b", dark: "#fbbf24" }, // amber-500/400
-                  },
-                  medium: {
-                    label: "Medium",
-                    theme: { light: "#eab308", dark: "#facc15" }, // yellow-500/400
-                  },
-                  low: {
-                    label: "Low",
-                    theme: { light: "#38bdf8", dark: "#7dd3fc" }, // sky-400/300
-                  },
-                  info: {
-                    label: "Info",
-                    theme: { light: "#94a3b8", dark: "#cbd5e1" }, // slate-400/300
-                  },
-                }}
-                className="h-[360px]"
-              >
-                <BarChart data={severityByReport} margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="key" tick={{ fontSize: 12 }} />
-                  <YAxis />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" />
-                  <Bar dataKey="high" stackId="a" fill="var(--color-high)" />
-                  <Bar dataKey="medium" stackId="a" fill="var(--color-medium)" />
-                  <Bar dataKey="low" stackId="a" fill="var(--color-low)" />
-                  <Bar dataKey="info" stackId="a" fill="var(--color-info)" />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle>Severity Distribution by Scan</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-grow">
+                <ChartContainer
+                  config={{
+                    // Tailwind palette approximations for consistent theming
+                    critical: {
+                      label: "Critical",
+                      theme: { light: "#ef4444", dark: "#f87171" }, // red-500/400
+                    },
+                    high: {
+                      label: "High",
+                      theme: { light: "#f59e0b", dark: "#fbbf24" }, // amber-500/400
+                    },
+                    medium: {
+                      label: "Medium",
+                      theme: { light: "#eab308", dark: "#facc15" }, // yellow-500/400
+                    },
+                    low: {
+                      label: "Low",
+                      theme: { light: "#38bdf8", dark: "#7dd3fc" }, // sky-400/300
+                    },
+                    info: {
+                      label: "Info",
+                      theme: { light: "#94a3b8", dark: "#cbd5e1" }, // slate-400/300
+                    },
+                  }}
+                  className="h-full w-full"
+                >
+                  <BarChart data={severityByReport} margin={{ left: 12, right: 12 }} className="h-full w-full">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="key" tick={{ fontSize: 12 }} />
+                    <YAxis />
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" />
+                    <Bar dataKey="high" stackId="a" fill="var(--color-high)" />
+                    <Bar dataKey="medium" stackId="a" fill="var(--color-medium)" />
+                    <Bar dataKey="low" stackId="a" fill="var(--color-low)" />
+                    <Bar dataKey="info" stackId="a" fill="var(--color-info)" />
+                  </BarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
 
-          {/* Line: Total over Time */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Total Findings Over Time</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer
-                config={{
-                  total: {
-                    label: "Total Findings",
-                    theme: { light: "#3b82f6", dark: "#60a5fa" }, // blue-500/400
-                  },
-                }}
-                className="h-[320px]"
-              >
-                <LineChart data={timeSeries} margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dateLabel" />
-                  <YAxis />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                  <Legend />
-                  <Line type="monotone" dataKey="total" stroke="var(--color-total)" dot />
-                </LineChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+            {/* Line: Total over Time */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle>Total Findings Over Time</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-grow">
+                <ChartContainer
+                  config={{
+                    total: {
+                      label: "Total Findings",
+                      theme: { light: "#3b82f6", dark: "#60a5fa" }, // blue-500/400
+                    },
+                  }}
+                  className="h-full w-full"
+                >
+                  <LineChart data={timeSeries} margin={{ left: 12, right: 12 }} className="h-full w-full">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dateLabel" />
+                    <YAxis />
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                    <Legend />
+                    <Line type="monotone" dataKey="total" stroke="var(--color-total)" dot />
+                  </LineChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Comparison Table */}
           <Card>
