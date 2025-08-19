@@ -189,6 +189,17 @@
   }
 }
 
+/* Utility: force black text within designated light-background cards */
+.card-light,
+.card-light [data-slot="card-title"],
+.card-light [data-slot="card-content"],
+.card-light [data-slot="card-description"],
+.card-light [data-slot="card-footer"],
+.card-light [data-slot="card-header"],
+.card-light * {
+  color: oklch(0 0 0) !important;
+}
+
 /* Additional theme palettes */
 .theme-kodama {
   --background: oklch(0.8798 0.0534 91.7893);

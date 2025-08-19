@@ -288,13 +288,6 @@ export default function UploadManager() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleViewReport(report)}
-                            >
-                              <BarChart3 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
                               onClick={() => handleDeleteReport(report.id, report.filename)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -309,97 +302,6 @@ export default function UploadManager() {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {selectedReport && (
-          <TabsContent value="details" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{selectedReport.filename} - Host Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading host details...</div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Hostname</TableHead>
-                        <TableHead>IP Address</TableHead>
-                        <TableHead>OS Info</TableHead>
-                        <TableHead>
-                          <div className="flex items-center gap-1">
-                            <AlertTriangle className="h-4 w-4 text-red-600" />
-                            Critical
-                          </div>
-                        </TableHead>
-                        <TableHead>
-                          <div className="flex items-center gap-1">
-                            <AlertTriangle className="h-4 w-4 text-orange-600" />
-                            High
-                          </div>
-                        </TableHead>
-                        <TableHead>
-                          <div className="flex items-center gap-1">
-                            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                            Medium
-                          </div>
-                        </TableHead>
-                        <TableHead>
-                          <div className="flex items-center gap-1">
-                            <AlertTriangle className="h-4 w-4 text-blue-600" />
-                            Low
-                          </div>
-                        </TableHead>
-                        <TableHead>
-                          <div className="flex items-center gap-1">
-                            <Info className="h-4 w-4 text-gray-600" />
-                            Info
-                          </div>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {hosts.map((host) => (
-                        <TableRow key={host.id}>
-                          <TableCell className="font-medium">{host.hostname}</TableCell>
-                          <TableCell>{host.ipAddress}</TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {host.osInfo || "Unknown"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getSeverityColor("critical", host.criticalCount)}>
-                              {host.criticalCount}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getSeverityColor("high", host.highCount)}>
-                              {host.highCount}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getSeverityColor("medium", host.mediumCount)}>
-                              {host.mediumCount}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getSeverityColor("low", host.lowCount)}>
-                              {host.lowCount}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getSeverityColor("info", host.infoCount)}>
-                              {host.infoCount}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );

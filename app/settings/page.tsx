@@ -376,6 +376,14 @@ export default function SettingsPage() {
               <span className="font-medium">Framework:</span>
               <span className="ml-2">Next.js + Tauri</span>
             </div>
+            <div>
+              <span className="font-medium">Author:</span>
+              <span className="ml-2">Jeremiah Price</span>
+            </div>
+            <div>
+              <span className="font-medium">Creation Date:</span>
+              <span className="ml-2">08/18/2025</span>
+            </div>
           </div>
         </CardContent>
       </Card>

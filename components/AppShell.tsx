@@ -2,7 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FileText, BarChart3, Settings, Shield, Upload } from "lucide-react";
+import { Home, FileText, BarChart3, Settings, Shield, Upload, TrendingUp } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -69,10 +69,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === "/trends"}>
+                <Link href="/trends">
+                  <TrendingUp />
+                  <span>Scan Trends</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === "/settings"}>
                 <Link href="/settings">
                   <Settings />
-                  <span>Settings</span>
+                  <span>App Settings</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

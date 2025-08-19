@@ -391,15 +391,15 @@ export default function ComparePage() {
                 <div className="space-y-6">
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="border-green-200 bg-green-50">
+                    <Card className="border-green-200 bg-green-50 text-black dark:text-black card-light">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-green-800">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
                           <Shield className="h-5 w-5" />
                           Common Vulnerabilities
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold text-green-900 mb-2">
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
                           {comparison.common.length}
                         </div>
                         <div className="space-y-1 text-sm">
@@ -419,15 +419,15 @@ export default function ComparePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border-orange-200 bg-orange-50">
+                    <Card className="border-orange-200 bg-orange-50 text-black dark:text-black card-light">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-orange-800">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
                           <AlertTriangle className="h-5 w-5" />
                           Unique to {reportData1.report.filename}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold text-orange-900 mb-2">
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
                           {comparison.uniqueToReport1.length}
                         </div>
                         <div className="space-y-1 text-sm">
@@ -447,15 +447,15 @@ export default function ComparePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border-blue-200 bg-blue-50">
+                    <Card className="border-blue-200 bg-blue-50 text-black dark:text-black card-light">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-blue-800">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
                           <AlertTriangle className="h-5 w-5" />
                           Unique to {reportData2.report.filename}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold text-blue-900 mb-2">
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
                           {comparison.uniqueToReport2.length}
                         </div>
                         <div className="space-y-1 text-sm">
@@ -681,16 +681,16 @@ export default function ComparePage() {
 
                   {/* Vulnerability Comparison for Common Hosts */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="border-emerald-200 bg-emerald-50">
+                    <Card className="border-emerald-200 bg-emerald-50 card-light">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-emerald-800">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
                           <Shield className="h-5 w-5" />
                           Persistent Vulnerabilities
                         </CardTitle>
-                        <p className="text-xs text-emerald-600">Found on same hosts in both scans</p>
+                        <p className="text-xs text-black dark:text-black">Found on same hosts in both scans</p>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold text-emerald-900 mb-2">
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
                           {hostComparison.sharedVulnerabilities.length}
                         </div>
                         <div className="space-y-1 text-sm">
@@ -710,16 +710,16 @@ export default function ComparePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border-red-200 bg-red-50">
+                    <Card className="border-red-200 bg-red-50 card-light">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-red-800">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
                           <AlertTriangle className="h-5 w-5" />
                           Resolved Vulnerabilities
                         </CardTitle>
-                        <p className="text-xs text-red-600">Present in scan 1, absent in scan 2</p>
+                        <p className="text-xs text-black dark:text-black">Present in scan 1, absent in scan 2</p>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold text-red-900 mb-2">
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
                           {hostComparison.vulnerabilitiesOnlyInReport1.length}
                         </div>
                         <div className="space-y-1 text-sm">
@@ -739,16 +739,16 @@ export default function ComparePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border-amber-200 bg-amber-50">
+                    <Card className="border-amber-200 bg-amber-50 card-light">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-amber-800">
+                        <CardTitle className="flex items-center gap-2 text-black dark:text-black">
                           <AlertTriangle className="h-5 w-5" />
                           New Vulnerabilities
                         </CardTitle>
-                        <p className="text-xs text-amber-600">Absent in scan 1, present in scan 2</p>
+                        <p className="text-xs text-black dark:text-black">Absent in scan 1, present in scan 2</p>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold text-amber-900 mb-2">
+                        <div className="text-2xl font-bold text-black dark:text-black mb-2">
                           {hostComparison.vulnerabilitiesOnlyInReport2.length}
                         </div>
                         <div className="space-y-1 text-sm">
