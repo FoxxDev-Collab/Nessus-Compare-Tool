@@ -161,6 +161,7 @@ export default function TrendsPage() {
       info: number;
       total: number;
       date: string;
+      shortKey?: string;
     }> = [];
     const ids = Array.from(selectedIds).filter((id) => dataByReport[id]);
     for (const id of ids) {
@@ -173,12 +174,15 @@ export default function TrendsPage() {
         else if (v.severity === 1) counts.low++;
         else counts.info++;
       }
+      const fullKey = `${rd.report.scanName || rd.report.filename}`;
+      const shortKey = fullKey.length > 26 ? `${fullKey.slice(0, 24)}…` : fullKey;
       out.push({
-        key: `${rd.report.scanName || rd.report.filename}`,
+        key: fullKey,
         id,
         ...counts,
         total: rd.vulnerabilities.length,
         date: rd.report.scanDate,
+        shortKey,
       });
     }
     // sort by date
@@ -194,6 +198,15 @@ export default function TrendsPage() {
       label: r.key,
     }));
   }, [severityByReport]);
+
+  // Dynamic height for vertical bar chart: ~44px per report row, min 300px
+  const severityChartHeight = useMemo(() => Math.max(300, severityByReport.length * 44), [severityByReport.length]);
+
+  // Dynamic Y-axis width based on longest short label
+  const yAxisWidth = useMemo(() => {
+    const longest = severityByReport.reduce((m, r) => Math.max(m, (r.shortKey || r.key).length), 0)
+    return Math.min(260, Math.max(120, longest * 8))
+  }, [severityByReport])
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
 
@@ -334,7 +347,7 @@ export default function TrendsPage() {
               <CardHeader>
                 <CardTitle>Severity Distribution by Scan</CardTitle>
               </CardHeader>
-              <CardContent className="flex-grow">
+              <CardContent className="flex-grow p-0">
                 <ChartContainer
                   config={{
                     // Tailwind palette approximations for consistent theming
@@ -359,19 +372,29 @@ export default function TrendsPage() {
                       theme: { light: "#94a3b8", dark: "#cbd5e1" }, // slate-400/300
                     },
                   }}
-                  className="h-full w-full"
+                  className="w-full aspect-auto justify-start items-stretch"
+                  style={{ height: severityChartHeight }}
                 >
-                  <BarChart data={severityByReport} margin={{ left: 12, right: 12 }} className="h-full w-full">
+                  <BarChart
+                    data={severityByReport}
+                    layout="vertical"
+                    margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                    barCategoryGap={12}
+                    barGap={2}
+                  >
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="key" tick={{ fontSize: 12 }} />
-                    <YAxis />
-                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                    <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" />
-                    <Bar dataKey="high" stackId="a" fill="var(--color-high)" />
-                    <Bar dataKey="medium" stackId="a" fill="var(--color-medium)" />
-                    <Bar dataKey="low" stackId="a" fill="var(--color-low)" />
-                    <Bar dataKey="info" stackId="a" fill="var(--color-info)" />
+                    <XAxis type="number" allowDecimals={false} domain={[0, 'dataMax + 10']} padding={{ right: 8 }} />
+                    <YAxis type="category" dataKey="shortKey" width={yAxisWidth} interval={0} tick={{ fontSize: 12 }} />
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent labelFormatter={(_, p) => (p?.[0]?.payload?.key as string) || ""} />}
+                    />
+                    <ChartLegend verticalAlign="bottom" content={<ChartLegendContent verticalAlign="bottom" />} />
+                    <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" barSize={14} />
+                    <Bar dataKey="high" stackId="a" fill="var(--color-high)" barSize={14} />
+                    <Bar dataKey="medium" stackId="a" fill="var(--color-medium)" barSize={14} />
+                    <Bar dataKey="low" stackId="a" fill="var(--color-low)" barSize={14} />
+                    <Bar dataKey="info" stackId="a" fill="var(--color-info)" barSize={14} />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
