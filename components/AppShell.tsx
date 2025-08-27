@@ -53,6 +53,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === "/hosts"}>
+                <Link href="/hosts">
+                  <Shield />
+                  <span>Host Analysis</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === "/reports"}>
                 <Link href="/reports">
                   <FileText />

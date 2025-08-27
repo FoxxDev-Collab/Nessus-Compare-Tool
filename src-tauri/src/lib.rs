@@ -21,6 +21,77 @@ pub struct NessusReport {
   pub scan_metadata: Option<String>,
 }
 
+#[tauri::command]
+fn get_hosts_by_identity(app: tauri::AppHandle, ip_identity: String, mac_identity: Option<String>) -> Result<Vec<NessusHost>, String> {
+  (|| -> Result<Vec<NessusHost>> {
+    let db = get_db_path(&app)?;
+    let conn = open_and_migrate(&db)?;
+
+    let mut stmt = conn.prepare(
+      "SELECT id, report_id, hostname, ip_address, mac_address, os_info,
+              total_vulnerabilities, critical_count, high_count, medium_count, low_count, info_count
+       FROM nessus_hosts
+       WHERE ip_address = ?1 AND (?2 IS NULL OR mac_address = ?2)
+       ORDER BY report_id DESC"
+    )?;
+
+    let rows = stmt.query_map(rusqlite::params![ip_identity, mac_identity], |r| Ok(NessusHost {
+      id: r.get(0)?,
+      report_id: r.get(1)?,
+      hostname: r.get(2)?,
+      ip_address: r.get(3)?,
+      mac_address: r.get(4)?,
+      os_info: r.get(5)?,
+      total_vulnerabilities: r.get(6)?,
+      critical_count: r.get(7)?,
+      high_count: r.get(8)?,
+      medium_count: r.get(9)?,
+      low_count: r.get(10)?,
+      info_count: r.get(11)?,
+    }))?.collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(rows)
+  })().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_vulnerabilities_by_identity(app: tauri::AppHandle, ip_identity: String, mac_identity: Option<String>) -> Result<Vec<NessusVulnerability>, String> {
+  (|| -> Result<Vec<NessusVulnerability>> {
+    let db = get_db_path(&app)?;
+    let conn = open_and_migrate(&db)?;
+
+    let mut stmt = conn.prepare(
+      "SELECT v.id, v.report_id, v.host_id, v.plugin_id, v.plugin_name, v.plugin_family, v.severity,
+              v.port, v.protocol, v.service, v.description, v.solution, v.cve, v.cvss_score
+       FROM nessus_vulnerabilities v
+       JOIN nessus_hosts h ON h.id = v.host_id
+       WHERE h.ip_address = ?1 AND (?2 IS NULL OR h.mac_address = ?2)
+       ORDER BY v.severity DESC, v.plugin_name"
+    )?;
+
+    let rows = stmt
+      .query_map(rusqlite::params![ip_identity, mac_identity], |r| Ok(NessusVulnerability {
+        id: r.get(0)?,
+        report_id: r.get(1)?,
+        host_id: r.get(2)?,
+        plugin_id: r.get(3)?,
+        plugin_name: r.get(4)?,
+        plugin_family: r.get(5)?,
+        severity: r.get(6)?,
+        port: r.get(7)?,
+        protocol: r.get(8)?,
+        service: r.get(9)?,
+        description: r.get(10)?,
+        solution: r.get(11)?,
+        cve: r.get(12)?,
+        cvss_score: r.get(13)?,
+      }))?
+      .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(rows)
+  })().map_err(|e| e.to_string())
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NessusHost {
@@ -36,6 +107,84 @@ pub struct NessusHost {
   pub medium_count: i32,
   pub low_count: i32,
   pub info_count: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AggregatedHost {
+  pub id: i64,
+  pub report_id: i64,
+  pub hostname: String,
+  pub ip_address: String,
+  pub mac_address: Option<String>,
+  pub os_info: Option<String>,
+  pub total_vulnerabilities: i32,
+  pub critical_count: i32,
+  pub high_count: i32,
+  pub medium_count: i32,
+  pub low_count: i32,
+  pub info_count: i32,
+}
+
+#[tauri::command]
+fn get_host_analysis(app: tauri::AppHandle) -> Result<Vec<AggregatedHost>, String> {
+  (|| -> Result<Vec<AggregatedHost>> {
+    let db = get_db_path(&app)?;
+    let conn = open_and_migrate(&db)?;
+
+    // Aggregate across all reports by IP address primarily
+    let mut stmt = conn.prepare(
+      "SELECT 
+         COALESCE(NULLIF(ip_address, ''), hostname) AS key_ip,
+         MAX(hostname) AS hostname,
+         MAX(NULLIF(mac_address, '')) AS mac_address,
+         MAX(NULLIF(os_info, '')) AS os_info,
+         SUM(total_vulnerabilities) AS total_vulnerabilities,
+         SUM(critical_count) AS critical_count,
+         SUM(high_count) AS high_count,
+         SUM(medium_count) AS medium_count,
+         SUM(low_count) AS low_count,
+         SUM(info_count) AS info_count
+       FROM nessus_hosts
+       GROUP BY key_ip
+       ORDER BY total_vulnerabilities DESC, critical_count DESC, high_count DESC"
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut results: Vec<AggregatedHost> = Vec::new();
+    let mut counter: i64 = 1;
+    while let Some(row) = rows.next()? {
+      let ip: String = row.get(0)?;
+      let hostname: String = row.get(1)?;
+      let mac: Option<String> = row.get(2)?;
+      let os_info: Option<String> = row.get(3)?;
+      let total: i32 = row.get(4)?;
+      let crit: i32 = row.get(5)?;
+      let high: i32 = row.get(6)?;
+      let med: i32 = row.get(7)?;
+      let low: i32 = row.get(8)?;
+      let info: i32 = row.get(9)?;
+
+      results.push(AggregatedHost {
+        id: counter,
+        report_id: 0,
+        hostname,
+        ip_address: ip,
+        mac_address: mac,
+        os_info,
+        total_vulnerabilities: total,
+        critical_count: crit,
+        high_count: high,
+        medium_count: med,
+        low_count: low,
+        info_count: info,
+      });
+      counter += 1;
+    }
+
+    Ok(results)
+  })()
+  .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1135,7 +1284,10 @@ pub fn run() {
       get_all_report_items,
       get_database_stats,
       delete_all_data,
-      optimize_database
+      optimize_database,
+      get_host_analysis,
+      get_hosts_by_identity,
+      get_vulnerabilities_by_identity
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

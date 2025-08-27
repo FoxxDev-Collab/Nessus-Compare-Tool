@@ -31,11 +31,12 @@ interface HostTableProps {
   title: string;
   hosts: NessusHost[];
   loading?: boolean;
+  onHostClick?: (host: NessusHost) => void;
 }
 
 
 
-export function HostTable({ title, hosts, loading = false }: HostTableProps) {
+export function HostTable({ title, hosts, loading = false, onHostClick }: HostTableProps) {
   return (
     <Card className="h-full">
       <CardHeader>
@@ -76,7 +77,11 @@ export function HostTable({ title, hosts, loading = false }: HostTableProps) {
                 </TableRow>
               ) : (
                 hosts.map((host) => (
-                  <TableRow key={host.id} className="odd:bg-muted/30">
+                  <TableRow
+                    key={host.id}
+                    className={`odd:bg-muted/30 ${onHostClick ? "cursor-pointer hover:bg-muted/60" : ""}`}
+                    onClick={onHostClick ? () => onHostClick(host) : undefined}
+                  >
                     <TableCell className="font-medium">{host.ipAddress}</TableCell>
                     <TableCell className="max-w-xs truncate" title={host.hostname}>
                       {host.hostname}
